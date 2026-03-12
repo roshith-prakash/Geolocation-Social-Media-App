@@ -1,9 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'supabase_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final SupabaseService _supabaseService = SupabaseService();
 
   /// Stream of auth state changes
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -47,6 +49,27 @@ class AuthService {
     );
 
     return await _auth.signInWithCredential(credential);
+  }
+
+  /// Ensure a Supabase profile exists for the current Firebase user.
+  /// Called by AuthWrapper after detecting a logged-in Firebase user.
+  Future<void> ensureSupabaseProfile() async {
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) return;
+
+    final existing =
+        await _supabaseService.getUserByFirebaseUid(firebaseUser.uid);
+
+    if (existing == null) {
+      // Create a new Supabase profile
+      await _supabaseService.createUser(
+        firebaseUid: firebaseUser.uid,
+        username:
+            firebaseUser.displayName ?? firebaseUser.email!.split('@')[0],
+        email: firebaseUser.email!,
+        profileImage: firebaseUser.photoURL,
+      );
+    }
   }
 
   /// Sign out

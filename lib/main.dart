@@ -5,8 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'utils/theme.dart';
 import 'utils/constants.dart';
+import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +17,7 @@ void main() async {
   await dotenv.load(fileName: '.env');
 
   // Initialize Firebase
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Initialize Supabase
   await Supabase.initialize(
@@ -40,9 +42,17 @@ class FlashMapApp extends StatelessWidget {
   }
 }
 
-/// Decides whether to show login or home based on Firebase auth state
-class AuthWrapper extends StatelessWidget {
+/// Decides whether to show login or home based on Firebase auth state.
+/// Also ensures a Supabase user profile exists before showing HomeScreen.
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  final _authService = AuthService();
 
   @override
   Widget build(BuildContext context) {
@@ -51,37 +61,99 @@ class AuthWrapper extends StatelessWidget {
       builder: (context, snapshot) {
         // Show loading while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            backgroundColor: AppTheme.primaryDark,
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ShaderMask(
-                    shaderCallback: (bounds) =>
-                        AppTheme.primaryGradient.createShader(bounds),
-                    child: const Icon(
-                      Icons.explore,
-                      size: 80,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const CircularProgressIndicator(color: AppTheme.accentCyan),
-                ],
-              ),
-            ),
-          );
+          return _buildLoadingScreen();
         }
 
-        // User is logged in
+        // User is logged in — ensure Supabase profile exists
         if (snapshot.hasData) {
-          return const HomeScreen();
+          return FutureBuilder(
+            future: _authService.ensureSupabaseProfile(),
+            builder: (context, profileSnapshot) {
+              if (profileSnapshot.connectionState == ConnectionState.waiting) {
+                return _buildLoadingScreen();
+              }
+
+              if (profileSnapshot.hasError) {
+                return _buildErrorScreen(profileSnapshot.error.toString());
+              }
+
+              return const HomeScreen();
+            },
+          );
         }
 
         // User is not logged in
         return const LoginScreen();
       },
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      backgroundColor: AppTheme.primaryDark,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ShaderMask(
+              shaderCallback: (bounds) =>
+                  AppTheme.primaryGradient.createShader(bounds),
+              child: const Icon(
+                Icons.explore,
+                size: 80,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(color: AppTheme.accentCyan),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorScreen(String error) {
+    return Scaffold(
+      backgroundColor: AppTheme.primaryDark,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline,
+                  size: 64, color: AppTheme.accentOrange),
+              const SizedBox(height: 16),
+              const Text(
+                'Failed to load profile',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => setState(() {}),
+                child: const Text('Retry'),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => _authService.signOut(),
+                child: const Text('Sign Out',
+                    style: TextStyle(color: AppTheme.accentPink)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

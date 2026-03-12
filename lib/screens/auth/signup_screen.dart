@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/theme.dart';
-import '../home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -42,18 +41,16 @@ class _SignupScreenState extends State<SignupScreen> {
         password: _passwordController.text,
       );
 
-      // Create Supabase profile
+      // Create Supabase profile with the chosen username
       await _supabaseService.createUser(
         firebaseUid: credential.user!.uid,
         username: _usernameController.text.trim(),
         email: _emailController.text.trim(),
       );
 
+      // Pop back — AuthWrapper will detect the new auth state and show HomeScreen
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {

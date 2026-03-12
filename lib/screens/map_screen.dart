@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/post_model.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
@@ -17,12 +17,11 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
   final _locationService = LocationService();
   final _supabaseService = SupabaseService();
 
-  Position? _currentPosition;
-  Set<Marker> _markers = {};
+  LatLng? _currentLatLng;
   List<PostModel> _nearbyPosts = [];
   bool _isLoading = true;
   double _searchRadius = AppConstants.defaultRadiusMeters;
@@ -37,7 +36,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final position = await _locationService.getCurrentPosition();
       setState(() {
-        _currentPosition = position;
+        _currentLatLng = LatLng(position.latitude, position.longitude);
         _isLoading = false;
       });
       _loadNearbyPosts();
@@ -52,18 +51,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _loadNearbyPosts() async {
-    if (_currentPosition == null) return;
+    if (_currentLatLng == null) return;
 
     try {
       final posts = await _supabaseService.getNearbyPosts(
-        latitude: _currentPosition!.latitude,
-        longitude: _currentPosition!.longitude,
+        latitude: _currentLatLng!.latitude,
+        longitude: _currentLatLng!.longitude,
         radiusMeters: _searchRadius,
       );
 
       setState(() {
         _nearbyPosts = posts;
-        _markers = _buildMarkers(posts);
       });
     } catch (e) {
       if (mounted) {
@@ -72,17 +70,6 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
     }
-  }
-
-  Set<Marker> _buildMarkers(List<PostModel> posts) {
-    return posts.map((post) {
-      return Marker(
-        markerId: MarkerId(post.id),
-        position: LatLng(post.latitude, post.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
-        onTap: () => _showPostDetail(post),
-      );
-    }).toSet();
   }
 
   void _showPostDetail(PostModel post) {
@@ -135,7 +122,7 @@ class _MapScreenState extends State<MapScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: AppTheme.accentCyan),
             )
-          : _currentPosition == null
+          : _currentLatLng == null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -158,36 +145,73 @@ class _MapScreenState extends State<MapScreen> {
                 )
               : Stack(
                   children: [
-                    GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(
-                          _currentPosition!.latitude,
-                          _currentPosition!.longitude,
-                        ),
-                        zoom: 15,
+                    FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _currentLatLng!,
+                        initialZoom: 15,
+                        maxZoom: 18,
+                        minZoom: 3,
                       ),
-                      onMapCreated: (controller) {
-                        _mapController = controller;
-                      },
-                      style: _darkMapStyle,
-                      markers: _markers,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      mapToolbarEnabled: false,
-                      circles: {
-                        Circle(
-                          circleId: const CircleId('search_radius'),
-                          center: LatLng(
-                            _currentPosition!.latitude,
-                            _currentPosition!.longitude,
-                          ),
-                          radius: _searchRadius,
-                          fillColor: AppTheme.accentCyan.withValues(alpha: 0.08),
-                          strokeColor: AppTheme.accentCyan.withValues(alpha: 0.3),
-                          strokeWidth: 1,
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                          subdomains: const ['a', 'b', 'c', 'd'],
+                          userAgentPackageName: 'com.flashmap.social',
                         ),
-                      },
+                        CircleLayer(
+                          circles: [
+                            CircleMarker(
+                              point: _currentLatLng!,
+                              radius: _searchRadius,
+                              useRadiusInMeter: true,
+                              color: AppTheme.accentCyan.withValues(alpha: 0.08),
+                              borderColor: AppTheme.accentCyan.withValues(alpha: 0.3),
+                              borderStrokeWidth: 1,
+                            ),
+                          ],
+                        ),
+                        MarkerLayer(
+                          markers: _nearbyPosts.map((post) {
+                            return Marker(
+                              point: LatLng(post.latitude, post.longitude),
+                              width: 40,
+                              height: 40,
+                              child: GestureDetector(
+                                onTap: () => _showPostDetail(post),
+                                child: const Icon(
+                                  Icons.location_on,
+                                  color: AppTheme.accentCyan,
+                                  size: 40,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: _currentLatLng!,
+                              width: 20,
+                              height: 20,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.3),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
 
                     // Post count badge
@@ -229,13 +253,8 @@ class _MapScreenState extends State<MapScreen> {
                       child: FloatingActionButton.small(
                         backgroundColor: AppTheme.surfaceDark,
                         onPressed: () {
-                          if (_currentPosition != null) {
-                            _mapController?.animateCamera(
-                              CameraUpdate.newLatLng(LatLng(
-                                _currentPosition!.latitude,
-                                _currentPosition!.longitude,
-                              )),
-                            );
+                          if (_currentLatLng != null) {
+                            _mapController.move(_currentLatLng!, 15);
                           }
                         },
                         child: const Icon(Icons.my_location,
@@ -265,21 +284,4 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
-
-  // Dark-themed map JSON style
-  static const String _darkMapStyle = '''[
-    {"elementType":"geometry","stylers":[{"color":"#212121"}]},
-    {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
-    {"elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
-    {"elementType":"labels.text.stroke","stylers":[{"color":"#212121"}]},
-    {"featureType":"administrative","elementType":"geometry","stylers":[{"color":"#757575"}]},
-    {"featureType":"poi","elementType":"geometry","stylers":[{"color":"#181818"}]},
-    {"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#2c2c2c"}]},
-    {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#8a8a8a"}]},
-    {"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#373737"}]},
-    {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#3c3c3c"}]},
-    {"featureType":"transit","elementType":"geometry","stylers":[{"color":"#2f3948"}]},
-    {"featureType":"water","elementType":"geometry","stylers":[{"color":"#000000"}]},
-    {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#3d3d3d"}]}
-  ]''';
 }

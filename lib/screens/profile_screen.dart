@@ -7,7 +7,6 @@ import '../services/supabase_service.dart';
 import '../utils/theme.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/post_card.dart';
-import 'auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -60,12 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _signOut() async {
     await _authService.signOut();
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-    }
+    // AuthWrapper will detect the auth state change and show LoginScreen
   }
 
   @override
