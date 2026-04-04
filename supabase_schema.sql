@@ -44,8 +44,62 @@ CREATE TABLE IF NOT EXISTS public.followers (
 );
 
 -- =====================
+-- Post Likes Table
+-- =====================
+CREATE TABLE IF NOT EXISTS public.post_likes (
+  post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (post_id, user_id)
+);
+
+-- =====================
+-- Comments Table
+-- =====================
+CREATE TABLE IF NOT EXISTS public.comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_post_id ON public.comments(post_id);
+
+-- =====================
+-- RPC: Get comments for a post
+-- =====================
+CREATE OR REPLACE FUNCTION get_comments(target_post_id UUID)
+RETURNS TABLE (
+  id UUID,
+  post_id UUID,
+  user_id UUID,
+  content TEXT,
+  created_at TIMESTAMPTZ,
+  username TEXT,
+  profile_image TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id,
+    c.post_id,
+    c.user_id,
+    c.content,
+    c.created_at,
+    u.username,
+    u.profile_image
+  FROM public.comments c
+  JOIN public.users u ON u.id = c.user_id
+  WHERE c.post_id = target_post_id
+  ORDER BY c.created_at ASC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================
 -- RPC: Get nearby posts within a radius
 -- =====================
+DROP FUNCTION IF EXISTS get_nearby_posts(double precision, double precision, double precision);
 CREATE OR REPLACE FUNCTION get_nearby_posts(
   lat DOUBLE PRECISION,
   lng DOUBLE PRECISION,
@@ -61,7 +115,8 @@ RETURNS TABLE (
   created_at TIMESTAMPTZ,
   username TEXT,
   profile_image TEXT,
-  distance DOUBLE PRECISION
+  distance DOUBLE PRECISION,
+  like_count BIGINT
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -78,14 +133,17 @@ BEGIN
     ST_Distance(
       p.location,
       ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
-    ) AS distance
+    ) AS distance,
+    COUNT(pl.user_id) AS like_count
   FROM public.posts p
   JOIN public.users u ON u.id = p.user_id
+  LEFT JOIN public.post_likes pl ON pl.post_id = p.id
   WHERE ST_DWithin(
     p.location,
     ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
     radius_meters
   )
+  GROUP BY p.id, u.username, u.profile_image
   ORDER BY distance ASC;
 END;
 $$ LANGUAGE plpgsql;
@@ -93,6 +151,7 @@ $$ LANGUAGE plpgsql;
 -- =====================
 -- RPC: Get posts by a specific user
 -- =====================
+DROP FUNCTION IF EXISTS get_user_posts(uuid);
 CREATE OR REPLACE FUNCTION get_user_posts(target_user_id UUID)
 RETURNS TABLE (
   id UUID,
@@ -103,7 +162,8 @@ RETURNS TABLE (
   longitude DOUBLE PRECISION,
   created_at TIMESTAMPTZ,
   username TEXT,
-  profile_image TEXT
+  profile_image TEXT,
+  like_count BIGINT
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -116,10 +176,13 @@ BEGIN
     ST_X(p.location::geometry) AS longitude,
     p.created_at,
     u.username,
-    u.profile_image
+    u.profile_image,
+    COUNT(pl.user_id) AS like_count
   FROM public.posts p
   JOIN public.users u ON u.id = p.user_id
+  LEFT JOIN public.post_likes pl ON pl.post_id = p.id
   WHERE p.user_id = target_user_id
+  GROUP BY p.id, u.username, u.profile_image
   ORDER BY p.created_at DESC;
 END;
 $$ LANGUAGE plpgsql;
@@ -153,15 +216,44 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.followers ENABLE ROW LEVEL SECURITY;
 
--- Allow public read, authenticated insert/update
+-- Users policies
+DROP POLICY IF EXISTS "Users are viewable by everyone" ON public.users;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users are viewable by everyone" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (true);
 CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (true);
 
+-- Posts policies
+DROP POLICY IF EXISTS "Posts are viewable by everyone" ON public.posts;
+DROP POLICY IF EXISTS "Authenticated users can insert posts" ON public.posts;
+DROP POLICY IF EXISTS "Users can delete own posts" ON public.posts;
 CREATE POLICY "Posts are viewable by everyone" ON public.posts FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can insert posts" ON public.posts FOR INSERT WITH CHECK (true);
 CREATE POLICY "Users can delete own posts" ON public.posts FOR DELETE USING (true);
 
+-- Followers policies
+DROP POLICY IF EXISTS "Followers are viewable by everyone" ON public.followers;
+DROP POLICY IF EXISTS "Authenticated users can follow" ON public.followers;
+DROP POLICY IF EXISTS "Authenticated users can unfollow" ON public.followers;
 CREATE POLICY "Followers are viewable by everyone" ON public.followers FOR SELECT USING (true);
 CREATE POLICY "Authenticated users can follow" ON public.followers FOR INSERT WITH CHECK (true);
 CREATE POLICY "Authenticated users can unfollow" ON public.followers FOR DELETE USING (true);
+
+-- Post likes policies
+ALTER TABLE public.post_likes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Likes are viewable by everyone" ON public.post_likes;
+DROP POLICY IF EXISTS "Authenticated users can like" ON public.post_likes;
+DROP POLICY IF EXISTS "Authenticated users can unlike" ON public.post_likes;
+CREATE POLICY "Likes are viewable by everyone" ON public.post_likes FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can like" ON public.post_likes FOR INSERT WITH CHECK (true);
+CREATE POLICY "Authenticated users can unlike" ON public.post_likes FOR DELETE USING (true);
+
+-- Comments policies
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Comments are viewable by everyone" ON public.comments;
+DROP POLICY IF EXISTS "Authenticated users can comment" ON public.comments;
+DROP POLICY IF EXISTS "Users can delete own comments" ON public.comments;
+CREATE POLICY "Comments are viewable by everyone" ON public.comments FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can comment" ON public.comments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can delete own comments" ON public.comments FOR DELETE USING (true);

@@ -3,9 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../services/supabase_service.dart';
-import '../utils/theme.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/post_card.dart';
+import 'user_list_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -13,93 +13,90 @@ class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key, required this.userId});
 
   @override
-  State<UserProfileScreen> createState() => _UserProfileScreenState();
+  State<UserProfileScreen> createState() => UserProfileScreenState();
 }
 
-class _UserProfileScreenState extends State<UserProfileScreen> {
-  final _supabaseService = SupabaseService();
+class UserProfileScreenState extends State<UserProfileScreen> {
+  final supabaseService = SupabaseService();
 
-  UserModel? _user;
-  List<PostModel> _posts = [];
-  int _followerCount = 0;
-  int _followingCount = 0;
-  bool _isFollowing = false;
-  bool _isLoading = true;
-  bool _isFollowLoading = false;
-  String? _currentUserId;
+  UserModel? user;
+  List<PostModel> posts = [];
+  int followerCount = 0;
+  int followingCount = 0;
+  bool isFollowing = false;
+  bool isLoading = true;
+  bool isFollowLoading = false;
+  String? currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    loadProfile();
   }
 
-  Future<void> _loadProfile() async {
-    setState(() => _isLoading = true);
+  Future<void> loadProfile() async {
+    setState(() => isLoading = true);
     try {
-      // Get current user ID
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser != null) {
         final currentUser =
-            await _supabaseService.getUserByFirebaseUid(firebaseUser.uid);
-        _currentUserId = currentUser?.id;
+            await supabaseService.getUserByFirebaseUid(firebaseUser.uid);
+        currentUserId = currentUser?.id;
       }
 
-      final user = await _supabaseService.getUserById(widget.userId);
-      if (user == null) {
-        setState(() => _isLoading = false);
+      final loadedUser = await supabaseService.getUserById(widget.userId);
+      if (loadedUser == null) {
+        setState(() => isLoading = false);
         return;
       }
 
-      final posts = await _supabaseService.getPostsByUser(widget.userId);
-      final followers =
-          await _supabaseService.getFollowerCount(widget.userId);
-      final following =
-          await _supabaseService.getFollowingCount(widget.userId);
+      final loadedPosts = await supabaseService.getPostsByUser(widget.userId);
+      final followers = await supabaseService.getFollowerCount(widget.userId);
+      final following = await supabaseService.getFollowingCount(widget.userId);
 
-      bool isFollowing = false;
-      if (_currentUserId != null && _currentUserId != widget.userId) {
-        isFollowing = await _supabaseService.isFollowing(
-          followerId: _currentUserId!,
+      bool currentlyFollowing = false;
+      if (currentUserId != null && currentUserId != widget.userId) {
+        currentlyFollowing = await supabaseService.isFollowing(
+          followerId: currentUserId!,
           followingId: widget.userId,
         );
       }
 
       setState(() {
-        _user = user;
-        _posts = posts;
-        _followerCount = followers;
-        _followingCount = following;
-        _isFollowing = isFollowing;
-        _isLoading = false;
+        user = loadedUser;
+        posts = loadedPosts;
+        followerCount = followers;
+        followingCount = following;
+        isFollowing = currentlyFollowing;
+        isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      setState(() => isLoading = false);
     }
   }
 
-  Future<void> _toggleFollow() async {
-    if (_currentUserId == null || _currentUserId == widget.userId) return;
+  Future<void> toggleFollow() async {
+    if (currentUserId == null || currentUserId == widget.userId) return;
 
-    setState(() => _isFollowLoading = true);
+    setState(() => isFollowLoading = true);
     try {
-      if (_isFollowing) {
-        await _supabaseService.unfollowUser(
-          followerId: _currentUserId!,
+      if (isFollowing) {
+        await supabaseService.unfollowUser(
+          followerId: currentUserId!,
           followingId: widget.userId,
         );
         setState(() {
-          _isFollowing = false;
-          _followerCount--;
+          isFollowing = false;
+          followerCount--;
         });
       } else {
-        await _supabaseService.followUser(
-          followerId: _currentUserId!,
+        await supabaseService.followUser(
+          followerId: currentUserId!,
           followingId: widget.userId,
         );
         setState(() {
-          _isFollowing = true;
-          _followerCount++;
+          isFollowing = true;
+          followerCount++;
         });
       }
     } catch (e) {
@@ -109,33 +106,49 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         );
       }
     } finally {
-      setState(() => _isFollowLoading = false);
+      setState(() => isFollowLoading = false);
     }
+  }
+
+  Widget buildStat(String label, String value, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          children: [
+            Text(value,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(label),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isOwnProfile = _currentUserId == widget.userId;
+    final isOwnProfile = currentUserId == widget.userId;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_user?.username ?? 'Profile'),
+        title: Text(user?.username ?? 'Profile'),
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accentCyan))
-          : _user == null
-              ? const Center(
-                  child: Text('User not found',
-                      style: TextStyle(color: AppTheme.textSecondary)))
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : user == null
+              ? const Center(child: Text('User not found'))
               : ListView(
                   children: [
                     const SizedBox(height: 24),
+
                     // Avatar
                     Center(
                       child: UserAvatar(
-                        imageUrl: _user!.profileImage,
-                        username: _user!.username,
+                        imageUrl: user!.profileImage,
+                        username: user!.username,
                         radius: 50,
                       ),
                     ),
@@ -144,12 +157,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     // Username
                     Center(
                       child: Text(
-                        _user!.username,
+                        user!.username,
                         style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -158,21 +168,37 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildStat('Posts', _posts.length.toString()),
-                        Container(
-                          width: 1,
-                          height: 36,
-                          color: AppTheme.borderDark,
-                          margin: const EdgeInsets.symmetric(horizontal: 24),
-                        ),
-                        _buildStat('Followers', _followerCount.toString()),
-                        Container(
-                          width: 1,
-                          height: 36,
-                          color: AppTheme.borderDark,
-                          margin: const EdgeInsets.symmetric(horizontal: 24),
-                        ),
-                        _buildStat('Following', _followingCount.toString()),
+                        buildStat('Posts', posts.length.toString()),
+                        const SizedBox(width: 8),
+                        buildStat('Followers', followerCount.toString(), onTap: () {
+                          if (user != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserListScreen(
+                                  title: 'Followers',
+                                  userId: user!.id,
+                                  isFollowers: true,
+                                ),
+                              ),
+                            );
+                          }
+                        }),
+                        const SizedBox(width: 8),
+                        buildStat('Following', followingCount.toString(), onTap: () {
+                          if (user != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserListScreen(
+                                  title: 'Following',
+                                  userId: user!.id,
+                                  isFollowers: false,
+                                ),
+                              ),
+                            );
+                          }
+                        }),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -181,96 +207,35 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     if (!isOwnProfile)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: _isFollowing
-                            ? OutlinedButton(
-                                onPressed:
-                                    _isFollowLoading ? null : _toggleFollow,
-                                child: _isFollowLoading
-                                    ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : const Text('Unfollow'),
-                              )
-                            : ElevatedButton(
-                                onPressed:
-                                    _isFollowLoading ? null : _toggleFollow,
-                                child: _isFollowLoading
-                                    ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppTheme.primaryDark),
-                                      )
-                                    : const Text('Follow'),
-                              ),
+                        child: ElevatedButton(
+                          onPressed: isFollowLoading ? null : toggleFollow,
+                          child: isFollowLoading
+                              ? const CircularProgressIndicator()
+                              : Text(isFollowing ? 'Unfollow' : 'Follow'),
+                        ),
                       ),
                     const SizedBox(height: 20),
 
-                    // Posts header
-                    const Divider(color: AppTheme.borderDark),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 8),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.grid_view,
-                              color: AppTheme.accentCyan, size: 18),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Posts',
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Text(
+                        'Posts',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                     ),
 
                     // Posts
-                    if (_posts.isEmpty)
+                    if (posts.isEmpty)
                       const Padding(
                         padding: EdgeInsets.all(40),
-                        child: Center(
-                          child: Text(
-                            'No posts yet',
-                            style: TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 16),
-                          ),
-                        ),
+                        child: Center(child: Text('No posts yet')),
                       )
                     else
-                      ..._posts.map((post) => PostCard(post: post)),
+                      ...posts.map((post) => PostCard(post: post)),
                   ],
                 ),
-    );
-  }
-
-  Widget _buildStat(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            color: AppTheme.textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 13,
-          ),
-        ),
-      ],
     );
   }
 }

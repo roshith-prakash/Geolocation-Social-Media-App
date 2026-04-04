@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "808909946820-84kssd1bksp9vefk8l3dki2jkq18glte.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.geolocation_social_media",
+            "certificate_hash": "3b39777f251e3faad9ab6a51cf3b006b8cc6d6e4"
+          }
+        },
+        {
           "client_id": "808909946820-7aps4lfv8k3pq5i0jntlfl6b7hgpnf4c.apps.googleusercontent.com",
           "client_type": 3
         }

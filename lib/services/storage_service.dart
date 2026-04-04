@@ -4,44 +4,53 @@ import 'package:uuid/uuid.dart';
 import '../utils/constants.dart';
 
 class StorageService {
-  static SupabaseClient get _client => Supabase.instance.client;
-  static const _uuid = Uuid();
+  static SupabaseClient get client => Supabase.instance.client;
+  static const uuid = Uuid();
 
-  /// Upload an image file to Supabase Storage and return the public URL
+  /// Upload a post image to Supabase Storage and return the public URL
   Future<String> uploadPostImage(File imageFile) async {
     final fileExtension = imageFile.path.split('.').last;
-    final fileName = '${_uuid.v4()}.$fileExtension';
+    final fileName = '${uuid.v4()}.$fileExtension';
     final filePath = 'posts/$fileName';
 
-    await _client.storage
+    await client.storage
         .from(AppConstants.postImagesBucket)
         .upload(filePath, imageFile);
 
-    final publicUrl = _client.storage
+    return client.storage
         .from(AppConstants.postImagesBucket)
         .getPublicUrl(filePath);
-
-    return publicUrl;
   }
 
-  /// Delete an image from Supabase Storage
+  /// Upload a profile avatar image (upserts) and return the public URL
+  Future<String> uploadProfileImage(String path, String userId) async {
+    final file = File(path);
+    final ext = path.split('.').last;
+    final storagePath = 'avatars/$userId.$ext';
+
+    await client.storage
+        .from(AppConstants.postImagesBucket)
+        .upload(storagePath, file,
+            fileOptions: const FileOptions(upsert: true));
+
+    return client.storage
+        .from(AppConstants.postImagesBucket)
+        .getPublicUrl(storagePath);
+  }
+
+  /// Delete an image from Supabase Storage by its public URL
   Future<void> deleteImage(String imageUrl) async {
     try {
-      // Extract the path from the full URL
       final uri = Uri.parse(imageUrl);
       final pathSegments = uri.pathSegments;
-      // The path after /storage/v1/object/public/{bucket}/
       final bucketIndex =
           pathSegments.indexOf(AppConstants.postImagesBucket);
       if (bucketIndex == -1) return;
-
-      final filePath =
-          pathSegments.sublist(bucketIndex + 1).join('/');
-
-      await _client.storage
+      final filePath = pathSegments.sublist(bucketIndex + 1).join('/');
+      await client.storage
           .from(AppConstants.postImagesBucket)
           .remove([filePath]);
-    } catch (e) {
+    } catch (_) {
       // Silently fail — image may already be deleted
     }
   }

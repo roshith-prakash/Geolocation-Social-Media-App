@@ -6,122 +6,106 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
 import '../services/storage_service.dart';
-import '../utils/theme.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
 
   @override
-  State<CreatePostScreen> createState() => _CreatePostScreenState();
+  State<CreatePostScreen> createState() => CreatePostScreenState();
 }
 
-class _CreatePostScreenState extends State<CreatePostScreen> {
-  final _contentController = TextEditingController();
-  final _locationService = LocationService();
-  final _supabaseService = SupabaseService();
-  final _storageService = StorageService();
-  final _imagePicker = ImagePicker();
+class CreatePostScreenState extends State<CreatePostScreen> {
+  final contentController = TextEditingController();
+  final locationService = LocationService();
+  final supabaseService = SupabaseService();
+  final storageService = StorageService();
+  final imagePicker = ImagePicker();
 
-  Position? _currentPosition;
-  File? _selectedImage;
-  bool _isLoading = false;
-  bool _isGettingLocation = true;
-  String? _supabaseUserId;
+  Position? currentPosition;
+  File? selectedImage;
+  bool isLoading = false;
+  bool isGettingLocation = true;
+  String? supabaseUserId;
 
   @override
   void initState() {
     super.initState();
-    _initData();
+    initData();
   }
 
-  Future<void> _initData() async {
-    // Get current user's Supabase ID
+  Future<void> initData() async {
     final firebaseUser = FirebaseAuth.instance.currentUser;
     if (firebaseUser != null) {
-      final user =
-          await _supabaseService.getUserByFirebaseUid(firebaseUser.uid);
-      _supabaseUserId = user?.id;
+      final user = await supabaseService.getUserByFirebaseUid(firebaseUser.uid);
+      supabaseUserId = user?.id;
     }
 
-    // Get location
     try {
-      final position = await _locationService.getCurrentPosition();
+      final position = await locationService.getCurrentPosition();
       setState(() {
-        _currentPosition = position;
-        _isGettingLocation = false;
+        currentPosition = position;
+        isGettingLocation = false;
       });
     } catch (e) {
-      setState(() => _isGettingLocation = false);
+      setState(() => isGettingLocation = false);
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    final picked = await _imagePicker.pickImage(
+  Future<void> pickImage(ImageSource source) async {
+    final picked = await imagePicker.pickImage(
       source: source,
       maxWidth: 1080,
       maxHeight: 1080,
       imageQuality: 80,
     );
-
     if (picked != null) {
-      setState(() => _selectedImage = File(picked.path));
+      setState(() => selectedImage = File(picked.path));
     }
   }
 
-  Future<void> _createPost() async {
-    if (_contentController.text.trim().isEmpty && _selectedImage == null) {
+  Future<void> createPost() async {
+    if (contentController.text.trim().isEmpty && selectedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add text or an image')),
       );
       return;
     }
-
-    if (_currentPosition == null) {
+    if (currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Location not available')),
       );
       return;
     }
-
-    if (_supabaseUserId == null) {
+    if (supabaseUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('User profile not found')),
       );
       return;
     }
 
-    setState(() => _isLoading = true);
-
+    setState(() => isLoading = true);
     try {
       String? imageUrl;
-
-      // Upload image if selected
-      if (_selectedImage != null) {
-        imageUrl = await _storageService.uploadPostImage(_selectedImage!);
+      if (selectedImage != null) {
+        imageUrl = await storageService.uploadPostImage(selectedImage!);
       }
 
-      // Create post
-      await _supabaseService.createPost(
-        userId: _supabaseUserId!,
-        content: _contentController.text.trim().isNotEmpty
-            ? _contentController.text.trim()
+      await supabaseService.createPost(
+        userId: supabaseUserId!,
+        content: contentController.text.trim().isNotEmpty
+            ? contentController.text.trim()
             : null,
         imageUrl: imageUrl,
-        latitude: _currentPosition!.latitude,
-        longitude: _currentPosition!.longitude,
+        latitude: currentPosition!.latitude,
+        longitude: currentPosition!.longitude,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post created! 📍'),
-            backgroundColor: AppTheme.accentGreen,
-          ),
+          const SnackBar(content: Text('Post created!')),
         );
-
-        // Reset form
-        _contentController.clear();
-        setState(() => _selectedImage = null);
+        contentController.clear();
+        setState(() => selectedImage = null);
       }
     } catch (e) {
       if (mounted) {
@@ -130,13 +114,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   @override
   void dispose() {
-    _contentController.dispose();
+    contentController.dispose();
     super.dispose();
   }
 
@@ -146,151 +130,86 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       appBar: AppBar(
         title: const Text('Create Post'),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton(
-              onPressed: _isLoading ? null : _createPost,
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppTheme.accentCyan,
-                      ),
-                    )
-                  : const Text(
-                      'Post',
-                      style: TextStyle(
-                        color: AppTheme.accentCyan,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-            ),
+          TextButton(
+            onPressed: isLoading ? null : createPost,
+            child: isLoading
+                ? const Text('Posting...')
+                : const Text('Post'),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Location info
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceDark,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.borderDark),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.location_on, color: AppTheme.accentCyan),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _isGettingLocation
-                        ? const Text(
-                            'Getting your location...',
-                            style: TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 14),
-                          )
-                        : _currentPosition != null
-                            ? Text(
-                                '${_currentPosition!.latitude.toStringAsFixed(4)}, ${_currentPosition!.longitude.toStringAsFixed(4)}',
-                                style: const TextStyle(
-                                    color: AppTheme.textPrimary, fontSize: 14),
-                              )
-                            : const Text(
-                                'Location unavailable',
-                                style: TextStyle(
-                                    color: AppTheme.accentOrange, fontSize: 14),
-                              ),
+            Row(
+              children: [
+                const Icon(Icons.location_on),
+                const SizedBox(width: 8),
+                if (isGettingLocation)
+                  const Text('Getting your location...')
+                else if (currentPosition != null)
+                  Text(
+                    '${currentPosition!.latitude.toStringAsFixed(4)}, '
+                    '${currentPosition!.longitude.toStringAsFixed(4)}',
+                  )
+                else
+                  const Text('Location unavailable'),
+                if (isGettingLocation) ...[
+                  const SizedBox(width: 8),
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  if (_isGettingLocation)
-                    const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppTheme.accentCyan,
-                      ),
-                    ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // Content text field
-            Container(
-              decoration: BoxDecoration(
-                gradient: AppTheme.cardGradient,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderDark),
-              ),
-              child: TextField(
-                controller: _contentController,
-                maxLines: 6,
-                style: const TextStyle(
-                    color: AppTheme.textPrimary, fontSize: 16, height: 1.5),
-                decoration: const InputDecoration(
-                  hintText: "What's happening here? 📍",
-                  hintStyle: TextStyle(color: AppTheme.textMuted),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.all(16),
-                ),
+            TextField(
+              controller: contentController,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                hintText: "What's happening here?",
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // Selected image preview
-            if (_selectedImage != null)
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.file(
-                      _selectedImage!,
-                      width: double.infinity,
-                      height: 220,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedImage = null),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.close,
-                            color: Colors.white, size: 18),
-                      ),
-                    ),
-                  ),
-                ],
+            if (selectedImage != null) ...[
+              Image.file(
+                selectedImage!,
+                width: double.infinity,
+                height: 220,
+                fit: BoxFit.cover,
               ),
-
-            const SizedBox(height: 20),
+              TextButton.icon(
+                onPressed: () => setState(() => selectedImage = null),
+                icon: const Icon(Icons.close),
+                label: const Text('Remove image'),
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // Image picker buttons
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.camera),
+                  child: ElevatedButton.icon(
+                    onPressed: () => pickImage(ImageSource.camera),
                     icon: const Icon(Icons.camera_alt),
                     label: const Text('Camera'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.gallery),
+                  child: ElevatedButton.icon(
+                    onPressed: () => pickImage(ImageSource.gallery),
                     icon: const Icon(Icons.photo_library),
                     label: const Text('Gallery'),
                   ),

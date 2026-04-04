@@ -1,47 +1,49 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import '../models/post_model.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/constants.dart';
-import '../utils/theme.dart';
 import '../widgets/post_marker_info.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'user_profile_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  State<MapScreen> createState() => MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
-  final MapController _mapController = MapController();
-  final _locationService = LocationService();
-  final _supabaseService = SupabaseService();
+class MapScreenState extends State<MapScreen> {
+  final MapController mapController = MapController();
+  final locationService = LocationService();
+  final supabaseService = SupabaseService();
 
-  LatLng? _currentLatLng;
-  List<PostModel> _nearbyPosts = [];
-  bool _isLoading = true;
-  double _searchRadius = AppConstants.defaultRadiusMeters;
+  LatLng? currentLatLng;
+  List<PostModel> nearbyPosts = [];
+  bool isLoading = true;
+  double searchRadius = AppConstants.defaultRadiusMeters;
+
+  // Simple list of radius options
+  final List<double> radiusOptions = [500, 1000, 2000, 5000, 10000];
 
   @override
   void initState() {
     super.initState();
-    _initLocation();
+    initLocation();
   }
 
-  Future<void> _initLocation() async {
+  Future<void> initLocation() async {
     try {
-      final position = await _locationService.getCurrentPosition();
+      final position = await locationService.getCurrentPosition();
       setState(() {
-        _currentLatLng = LatLng(position.latitude, position.longitude);
-        _isLoading = false;
+        currentLatLng = LatLng(position.latitude, position.longitude);
+        isLoading = false;
       });
-      _loadNearbyPosts();
+      loadNearbyPosts();
     } catch (e) {
-      setState(() => _isLoading = false);
+      setState(() => isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
@@ -50,18 +52,16 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _loadNearbyPosts() async {
-    if (_currentLatLng == null) return;
-
+  Future<void> loadNearbyPosts() async {
+    if (currentLatLng == null) return;
     try {
-      final posts = await _supabaseService.getNearbyPosts(
-        latitude: _currentLatLng!.latitude,
-        longitude: _currentLatLng!.longitude,
-        radiusMeters: _searchRadius,
+      final posts = await supabaseService.getNearbyPosts(
+        latitude: currentLatLng!.latitude,
+        longitude: currentLatLng!.longitude,
+        radiusMeters: searchRadius,
       );
-
       setState(() {
-        _nearbyPosts = posts;
+        nearbyPosts = posts;
       });
     } catch (e) {
       if (mounted) {
@@ -72,17 +72,16 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showPostDetail(PostModel post) {
+  void showPostDetail(PostModel post) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (context) => PostMarkerInfo(
         post: post,
         onAuthorTap: () {
           Navigator.of(context).pop();
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => UserProfileScreen(userId: post.userId),
+              builder: (ctx) => UserProfileScreen(userId: post.userId),
             ),
           );
         },
@@ -90,54 +89,49 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  String radiusLabel(double r) {
+    if (r < 1000) return '${r.toInt()}m';
+    return '${(r / 1000).toInt()} km';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Explore Map'),
+        title: Text('Map (${nearbyPosts.length} posts)'),
         actions: [
-          // Radius selector
-          PopupMenuButton<double>(
-            icon: const Icon(Icons.tune, color: AppTheme.accentCyan),
-            color: AppTheme.surfaceDark,
-            onSelected: (radius) {
-              setState(() => _searchRadius = radius);
-              _loadNearbyPosts();
+          // Simple radius dropdown
+          DropdownButton<double>(
+            value: searchRadius,
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => searchRadius = value);
+              loadNearbyPosts();
             },
-            itemBuilder: (context) => [
-              _radiusMenuItem(500, '500m'),
-              _radiusMenuItem(1000, '1 km'),
-              _radiusMenuItem(2000, '2 km'),
-              _radiusMenuItem(5000, '5 km'),
-              _radiusMenuItem(10000, '10 km'),
-            ],
+            items: radiusOptions.map((r) {
+              return DropdownMenuItem(value: r, child: Text(radiusLabel(r)));
+            }).toList(),
           ),
+          const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(Icons.refresh, color: AppTheme.accentCyan),
-            onPressed: _loadNearbyPosts,
+            icon: const Icon(Icons.refresh),
+            onPressed: loadNearbyPosts,
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accentCyan),
-            )
-          : _currentLatLng == null
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : currentLatLng == null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.location_off,
-                          size: 64, color: AppTheme.textMuted),
+                      const Icon(Icons.location_off, size: 64),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Location unavailable',
-                        style: TextStyle(
-                            color: AppTheme.textSecondary, fontSize: 18),
-                      ),
+                      const Text('Location unavailable', style: TextStyle(fontSize: 18)),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: _initLocation,
+                        onPressed: initLocation,
                         child: const Text('Retry'),
                       ),
                     ],
@@ -146,42 +140,33 @@ class _MapScreenState extends State<MapScreen> {
               : Stack(
                   children: [
                     FlutterMap(
-                      mapController: _mapController,
+                      mapController: mapController,
                       options: MapOptions(
-                        initialCenter: _currentLatLng!,
+                        initialCenter: currentLatLng!,
                         initialZoom: 15,
                         maxZoom: 18,
                         minZoom: 3,
+                        interactionOptions: const InteractionOptions(
+                          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                        ),
                       ),
                       children: [
                         TileLayer(
-                          urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                          subdomains: const ['a', 'b', 'c', 'd'],
+                          urlTemplate:
+                              'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
                           userAgentPackageName: 'com.flashmap.social',
                         ),
-                        CircleLayer(
-                          circles: [
-                            CircleMarker(
-                              point: _currentLatLng!,
-                              radius: _searchRadius,
-                              useRadiusInMeter: true,
-                              color: AppTheme.accentCyan.withValues(alpha: 0.08),
-                              borderColor: AppTheme.accentCyan.withValues(alpha: 0.3),
-                              borderStrokeWidth: 1,
-                            ),
-                          ],
-                        ),
                         MarkerLayer(
-                          markers: _nearbyPosts.map((post) {
+                          markers: nearbyPosts.map((post) {
                             return Marker(
                               point: LatLng(post.latitude, post.longitude),
                               width: 40,
                               height: 40,
                               child: GestureDetector(
-                                onTap: () => _showPostDetail(post),
+                                onTap: () => showPostDetail(post),
                                 child: const Icon(
                                   Icons.location_on,
-                                  color: AppTheme.accentCyan,
+                                  color: Colors.blue,
                                   size: 40,
                                 ),
                               ),
@@ -191,22 +176,13 @@ class _MapScreenState extends State<MapScreen> {
                         MarkerLayer(
                           markers: [
                             Marker(
-                              point: _currentLatLng!,
+                              point: currentLatLng!,
                               width: 20,
                               height: 20,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.blue,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.3),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
+                              child: const Icon(
+                                Icons.my_location,
+                                color: Colors.blue,
+                                size: 20,
                               ),
                             ),
                           ],
@@ -214,74 +190,21 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
 
-                    // Post count badge
-                    Positioned(
-                      top: 16,
-                      left: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceDark.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: AppTheme.borderDark, width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.pin_drop,
-                                size: 16, color: AppTheme.accentCyan),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${_nearbyPosts.length} posts nearby',
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
                     // My location button
                     Positioned(
                       bottom: 24,
                       right: 16,
-                      child: FloatingActionButton.small(
-                        backgroundColor: AppTheme.surfaceDark,
+                      child: FloatingActionButton(
                         onPressed: () {
-                          if (_currentLatLng != null) {
-                            _mapController.move(_currentLatLng!, 15);
+                          if (currentLatLng != null) {
+                            mapController.move(currentLatLng!, 15);
                           }
                         },
-                        child: const Icon(Icons.my_location,
-                            color: AppTheme.accentCyan),
+                        child: const Icon(Icons.my_location),
                       ),
                     ),
                   ],
                 ),
-    );
-  }
-
-  PopupMenuItem<double> _radiusMenuItem(double value, String label) {
-    return PopupMenuItem<double>(
-      value: value,
-      child: Row(
-        children: [
-          Icon(
-            _searchRadius == value
-                ? Icons.radio_button_checked
-                : Icons.radio_button_off,
-            color: AppTheme.accentCyan,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: AppTheme.textPrimary)),
-        ],
-      ),
     );
   }
 }

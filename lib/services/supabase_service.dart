@@ -1,7 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/user_model.dart';
 import '../models/post_model.dart';
+import '../models/comment_model.dart';
 import '../utils/constants.dart';
+
+const likesTable = 'post_likes';
 
 class SupabaseService {
   static SupabaseClient get client => Supabase.instance.client;
@@ -120,6 +123,78 @@ class SupabaseService {
   /// Delete a post
   Future<void> deletePost(String postId) async {
     await client.from(AppConstants.postsTable).delete().eq('id', postId);
+  }
+
+  // ─── Like Operations ───
+
+  /// Like a post
+  Future<void> likePost({required String postId, required String userId}) async {
+    await client.from(likesTable).insert({
+      'post_id': postId,
+      'user_id': userId,
+    });
+  }
+
+  /// Unlike a post
+  Future<void> unlikePost({required String postId, required String userId}) async {
+    await client
+        .from(likesTable)
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', userId);
+  }
+
+  /// Whether the current user has liked a post
+  Future<bool> isLiked({required String postId, required String userId}) async {
+    final response = await client
+        .from(likesTable)
+        .select()
+        .eq('post_id', postId)
+        .eq('user_id', userId)
+        .maybeSingle();
+    return response != null;
+  }
+
+  /// Total like count for a post
+  Future<int> getLikeCount(String postId) async {
+    final response = await client
+        .from(likesTable)
+        .select()
+        .eq('post_id', postId);
+    return (response as List).length;
+  }
+
+  // ─── Comment Operations ───
+
+  /// Add a comment to a post
+  Future<CommentModel> addComment({
+    required String postId,
+    required String userId,
+    required String content,
+  }) async {
+    final response = await client.from('comments').insert({
+      'post_id': postId,
+      'user_id': userId,
+      'content': content,
+    }).select().single();
+    // Fetch full comment with username via RPC
+    final comments = await getComments(postId);
+    return comments.firstWhere((c) => c.id == response['id']);
+  }
+
+  /// Get all comments for a post
+  Future<List<CommentModel>> getComments(String postId) async {
+    final response = await client.rpc('get_comments', params: {
+      'target_post_id': postId,
+    });
+    return (response as List)
+        .map((json) => CommentModel.fromJson(json))
+        .toList();
+  }
+
+  /// Delete a comment
+  Future<void> deleteComment(String commentId) async {
+    await client.from('comments').delete().eq('id', commentId);
   }
 
   // ─── Follower Operations ───

@@ -9,6 +9,7 @@ class PostModel {
   final String? authorUsername;
   final String? authorImage;
   final double? distance; // distance in meters from query point
+  final int likeCount;
 
   PostModel({
     required this.id,
@@ -21,6 +22,7 @@ class PostModel {
     this.authorUsername,
     this.authorImage,
     this.distance,
+    this.likeCount = 0,
   });
 
   /// From the RPC `get_nearby_posts` result
@@ -38,6 +40,7 @@ class PostModel {
       distance: json['distance'] != null
           ? (json['distance'] as num).toDouble()
           : null,
+      likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
     );
   }
 
