@@ -15,7 +15,7 @@ class UserModel {
     required this.createdAt,
   });
 
-  factory UserModel.fromJson(Map<String, dynamic> json) {
+  static UserModel fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,
       firebaseUid: json['firebase_uid'] as String,

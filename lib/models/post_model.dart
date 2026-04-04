@@ -26,7 +26,7 @@ class PostModel {
   });
 
   /// From the RPC `get_nearby_posts` result
-  factory PostModel.fromJson(Map<String, dynamic> json) {
+  static PostModel fromJson(Map<String, dynamic> json) {
     return PostModel(
       id: json['id'] as String,
       userId: json['user_id'] as String,

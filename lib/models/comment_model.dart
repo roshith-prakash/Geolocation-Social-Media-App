@@ -17,7 +17,7 @@ class CommentModel {
     required this.createdAt,
   });
 
-  factory CommentModel.fromJson(Map<String, dynamic> json) {
+  static CommentModel fromJson(Map<String, dynamic> json) {
     return CommentModel(
       id: json['id'] as String,
       postId: json['post_id'] as String,

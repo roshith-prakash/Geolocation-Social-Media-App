@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/constants.dart';
 import '../widgets/post_marker_info.dart';
+import '../widgets/user_avatar.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'user_profile_screen.dart';
@@ -28,10 +31,33 @@ class MapScreenState extends State<MapScreen> {
   // Simple list of radius options
   final List<double> radiusOptions = [500, 1000, 2000, 5000, 10000];
 
+  UserModel? currentUser;
+  Set<String>? followingIds;
+
   @override
   void initState() {
     super.initState();
     initLocation();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final user = await supabaseService.getUserByFirebaseUid(uid);
+      if (user != null) {
+        final following = await supabaseService.getFollowing(user.id);
+        if (mounted) {
+          setState(() {
+            currentUser = user;
+            followingIds = following.map((u) => u.id).toSet();
+          });
+          // Reload to apply the filter if location was fetched first
+          loadNearbyPosts();
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> initLocation() async {
@@ -61,7 +87,13 @@ class MapScreenState extends State<MapScreen> {
         radiusMeters: searchRadius,
       );
       setState(() {
-        nearbyPosts = posts;
+        if (followingIds != null && currentUser != null) {
+          nearbyPosts = posts.where((p) {
+            return followingIds!.contains(p.userId) || p.userId == currentUser!.id;
+          }).toList();
+        } else {
+          nearbyPosts = []; // Wait until following info is loaded
+        }
       });
     } catch (e) {
       if (mounted) {
@@ -160,33 +192,33 @@ class MapScreenState extends State<MapScreen> {
                           markers: nearbyPosts.map((post) {
                             return Marker(
                               point: LatLng(post.latitude, post.longitude),
-                              width: 40,
-                              height: 40,
+                              width: 46,
+                              height: 46,
                               child: GestureDetector(
                                 onTap: () => showPostDetail(post),
-                                child: const Icon(
-                                  Icons.location_on,
-                                  color: Colors.blue,
-                                  size: 40,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Theme.of(context).primaryColor, width: 2),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: UserAvatar(
+                                    imageUrl: post.authorImage,
+                                    username: post.authorUsername ?? 'User',
+                                    radius: 20,
+                                  ),
                                 ),
                               ),
                             );
                           }).toList(),
                         ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: currentLatLng!,
-                              width: 20,
-                              height: 20,
-                              child: const Icon(
-                                Icons.my_location,
-                                color: Colors.blue,
-                                size: 20,
-                              ),
-                            ),
-                          ],
-                        ),
+
                       ],
                     ),
 

@@ -4,8 +4,8 @@ import 'package:uuid/uuid.dart';
 import '../utils/constants.dart';
 
 class StorageService {
-  static SupabaseClient get client => Supabase.instance.client;
-  static const uuid = Uuid();
+  final supabase = Supabase.instance.client;
+  final uuid = const Uuid();
 
   /// Upload a post image to Supabase Storage and return the public URL
   Future<String> uploadPostImage(File imageFile) async {
@@ -13,11 +13,11 @@ class StorageService {
     final fileName = '${uuid.v4()}.$fileExtension';
     final filePath = 'posts/$fileName';
 
-    await client.storage
+    await supabase.storage
         .from(AppConstants.postImagesBucket)
         .upload(filePath, imageFile);
 
-    return client.storage
+    return supabase.storage
         .from(AppConstants.postImagesBucket)
         .getPublicUrl(filePath);
   }
@@ -28,12 +28,12 @@ class StorageService {
     final ext = path.split('.').last;
     final storagePath = 'avatars/$userId.$ext';
 
-    await client.storage
+    await supabase.storage
         .from(AppConstants.postImagesBucket)
         .upload(storagePath, file,
             fileOptions: const FileOptions(upsert: true));
 
-    return client.storage
+    return supabase.storage
         .from(AppConstants.postImagesBucket)
         .getPublicUrl(storagePath);
   }
@@ -47,7 +47,7 @@ class StorageService {
           pathSegments.indexOf(AppConstants.postImagesBucket);
       if (bucketIndex == -1) return;
       final filePath = pathSegments.sublist(bucketIndex + 1).join('/');
-      await client.storage
+      await supabase.storage
           .from(AppConstants.postImagesBucket)
           .remove([filePath]);
     } catch (_) {

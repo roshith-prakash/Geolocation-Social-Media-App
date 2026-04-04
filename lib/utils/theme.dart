@@ -9,30 +9,15 @@ class AppTheme {
 
   static const Color accentCyan = Color(0xFF58A6FF);
   static const Color accentPurple = Color(0xFFBC8CFF);
-  static const Color accentPink = Color(0xFFF778BA);
-  static const Color accentGreen = Color(0xFF3FB950);
-  static const Color accentOrange = Color(0xFFF0883E);
 
   static const Color textPrimary = Color(0xFFF0F6FC);
   static const Color textSecondary = Color(0xFF8B949E);
   static const Color textMuted = Color(0xFF6E7681);
 
-  // ─── Gradients ───
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [accentCyan, accentPurple],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
 
-  static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF1A1F2E), Color(0xFF16192A)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
 
   // ─── Theme Data ───
-  static ThemeData get darkTheme {
-    return ThemeData(
+  static final ThemeData darkTheme = ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: primaryDark,
       primaryColor: accentCyan,
@@ -135,5 +120,4 @@ class AppTheme {
         thickness: 1,
       ),
     );
-  }
 }

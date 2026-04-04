@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'utils/constants.dart';
+import 'utils/theme.dart';
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -29,10 +30,12 @@ class FlashMapApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       title: 'FlashMap Social',
       debugShowCheckedModeBanner: false,
-      home: AuthWrapper(),
+      theme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
+      home: const AuthWrapper(),
     );
   }
 }

@@ -7,7 +7,7 @@ import '../utils/constants.dart';
 const likesTable = 'post_likes';
 
 class SupabaseService {
-  static SupabaseClient get client => Supabase.instance.client;
+  final supabase = Supabase.instance.client;
 
   // ─── User Operations ───
 
@@ -18,7 +18,7 @@ class SupabaseService {
     required String email,
     String? profileImage,
   }) async {
-    final response = await client.from(AppConstants.usersTable).insert({
+    final response = await supabase.from(AppConstants.usersTable).insert({
       'firebase_uid': firebaseUid,
       'username': username,
       'email': email,
@@ -30,7 +30,7 @@ class SupabaseService {
 
   /// Get user by Firebase UID
   Future<UserModel?> getUserByFirebaseUid(String firebaseUid) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.usersTable)
         .select()
         .eq('firebase_uid', firebaseUid)
@@ -42,7 +42,7 @@ class SupabaseService {
 
   /// Get user by Supabase ID
   Future<UserModel?> getUserById(String userId) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.usersTable)
         .select()
         .eq('id', userId)
@@ -54,7 +54,7 @@ class SupabaseService {
 
   /// Update user profile
   Future<void> updateUser(String userId, Map<String, dynamic> data) async {
-    await client
+    await supabase
         .from(AppConstants.usersTable)
         .update(data)
         .eq('id', userId);
@@ -62,15 +62,18 @@ class SupabaseService {
 
   /// Search users by username
   Future<List<UserModel>> searchUsers(String query) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.usersTable)
         .select()
         .ilike('username', '%$query%')
         .limit(20);
 
-    return (response as List)
-        .map((json) => UserModel.fromJson(json))
-        .toList();
+    List<dynamic> data = response as List;
+    List<UserModel> users = [];
+    for (var item in data) {
+      users.add(UserModel.fromJson(item));
+    }
+    return users;
   }
 
   // ─── Post Operations ───
@@ -83,7 +86,7 @@ class SupabaseService {
     required double latitude,
     required double longitude,
   }) async {
-    await client.rpc('create_post_with_location', params: {
+    await supabase.rpc('create_post_with_location', params: {
       'p_user_id': userId,
       'p_content': content,
       'p_image_url': imageUrl,
@@ -98,38 +101,44 @@ class SupabaseService {
     required double longitude,
     double radiusMeters = 1000.0,
   }) async {
-    final response = await client.rpc('get_nearby_posts', params: {
+    final response = await supabase.rpc('get_nearby_posts', params: {
       'lat': latitude,
       'lng': longitude,
       'radius_meters': radiusMeters,
     });
 
-    return (response as List)
-        .map((json) => PostModel.fromJson(json))
-        .toList();
+    List<dynamic> data = response as List;
+    List<PostModel> posts = [];
+    for (var item in data) {
+      posts.add(PostModel.fromJson(item));
+    }
+    return posts;
   }
 
   /// Get posts by a specific user
   Future<List<PostModel>> getPostsByUser(String userId) async {
-    final response = await client.rpc('get_user_posts', params: {
+    final response = await supabase.rpc('get_user_posts', params: {
       'target_user_id': userId,
     });
 
-    return (response as List)
-        .map((json) => PostModel.fromJson(json))
-        .toList();
+    List<dynamic> data = response as List;
+    List<PostModel> posts = [];
+    for (var item in data) {
+      posts.add(PostModel.fromJson(item));
+    }
+    return posts;
   }
 
   /// Delete a post
   Future<void> deletePost(String postId) async {
-    await client.from(AppConstants.postsTable).delete().eq('id', postId);
+    await supabase.from(AppConstants.postsTable).delete().eq('id', postId);
   }
 
   // ─── Like Operations ───
 
   /// Like a post
   Future<void> likePost({required String postId, required String userId}) async {
-    await client.from(likesTable).insert({
+    await supabase.from(likesTable).insert({
       'post_id': postId,
       'user_id': userId,
     });
@@ -137,7 +146,7 @@ class SupabaseService {
 
   /// Unlike a post
   Future<void> unlikePost({required String postId, required String userId}) async {
-    await client
+    await supabase
         .from(likesTable)
         .delete()
         .eq('post_id', postId)
@@ -146,7 +155,7 @@ class SupabaseService {
 
   /// Whether the current user has liked a post
   Future<bool> isLiked({required String postId, required String userId}) async {
-    final response = await client
+    final response = await supabase
         .from(likesTable)
         .select()
         .eq('post_id', postId)
@@ -157,7 +166,7 @@ class SupabaseService {
 
   /// Total like count for a post
   Future<int> getLikeCount(String postId) async {
-    final response = await client
+    final response = await supabase
         .from(likesTable)
         .select()
         .eq('post_id', postId);
@@ -172,7 +181,7 @@ class SupabaseService {
     required String userId,
     required String content,
   }) async {
-    final response = await client.from('comments').insert({
+    final response = await supabase.from('comments').insert({
       'post_id': postId,
       'user_id': userId,
       'content': content,
@@ -184,17 +193,20 @@ class SupabaseService {
 
   /// Get all comments for a post
   Future<List<CommentModel>> getComments(String postId) async {
-    final response = await client.rpc('get_comments', params: {
+    final response = await supabase.rpc('get_comments', params: {
       'target_post_id': postId,
     });
-    return (response as List)
-        .map((json) => CommentModel.fromJson(json))
-        .toList();
+    List<dynamic> data = response as List;
+    List<CommentModel> comments = [];
+    for (var item in data) {
+      comments.add(CommentModel.fromJson(item));
+    }
+    return comments;
   }
 
   /// Delete a comment
   Future<void> deleteComment(String commentId) async {
-    await client.from('comments').delete().eq('id', commentId);
+    await supabase.from('comments').delete().eq('id', commentId);
   }
 
   // ─── Follower Operations ───
@@ -204,7 +216,7 @@ class SupabaseService {
     required String followerId,
     required String followingId,
   }) async {
-    await client.from(AppConstants.followersTable).insert({
+    await supabase.from(AppConstants.followersTable).insert({
       'follower_id': followerId,
       'following_id': followingId,
     });
@@ -215,7 +227,7 @@ class SupabaseService {
     required String followerId,
     required String followingId,
   }) async {
-    await client
+    await supabase
         .from(AppConstants.followersTable)
         .delete()
         .eq('follower_id', followerId)
@@ -227,7 +239,7 @@ class SupabaseService {
     required String followerId,
     required String followingId,
   }) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.followersTable)
         .select()
         .eq('follower_id', followerId)
@@ -239,7 +251,7 @@ class SupabaseService {
 
   /// Get follower count
   Future<int> getFollowerCount(String userId) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.followersTable)
         .select()
         .eq('following_id', userId);
@@ -249,7 +261,7 @@ class SupabaseService {
 
   /// Get following count
   Future<int> getFollowingCount(String userId) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.followersTable)
         .select()
         .eq('follower_id', userId);
@@ -259,25 +271,31 @@ class SupabaseService {
 
   /// Get list of users that a user follows
   Future<List<UserModel>> getFollowing(String userId) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.followersTable)
         .select('following_id, users!followers_following_id_fkey(*)')
         .eq('follower_id', userId);
 
-    return (response as List).map((json) {
-      return UserModel.fromJson(json['users']);
-    }).toList();
+    List<dynamic> data = response as List;
+    List<UserModel> users = [];
+    for (var item in data) {
+      users.add(UserModel.fromJson(item['users']));
+    }
+    return users;
   }
 
   /// Get list of followers
   Future<List<UserModel>> getFollowers(String userId) async {
-    final response = await client
+    final response = await supabase
         .from(AppConstants.followersTable)
         .select('follower_id, users!followers_follower_id_fkey(*)')
         .eq('following_id', userId);
 
-    return (response as List).map((json) {
-      return UserModel.fromJson(json['users']);
-    }).toList();
+    List<dynamic> data = response as List;
+    List<UserModel> users = [];
+    for (var item in data) {
+      users.add(UserModel.fromJson(item['users']));
+    }
+    return users;
   }
 }
