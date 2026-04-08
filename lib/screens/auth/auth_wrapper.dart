@@ -11,6 +11,7 @@ class AuthWrapper extends StatefulWidget {
   @override
   State<AuthWrapper> createState() => AuthWrapperState();
 }
+
 class AuthWrapperState extends State<AuthWrapper> {
   final authService = AuthService();
   StreamSubscription<User?>? authSubscription;
@@ -85,9 +86,7 @@ class LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
@@ -112,7 +111,10 @@ class ErrorScreen extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            const Text('Failed to load profile', style: TextStyle(fontSize: 18)),
+            const Text(
+              'Failed to load profile',
+              style: TextStyle(fontSize: 18),
+            ),
             const SizedBox(height: 8),
             Text(error, textAlign: TextAlign.center),
             const SizedBox(height: 24),

@@ -9,7 +9,7 @@ const likesTable = 'post_likes';
 class SupabaseService {
   final supabase = Supabase.instance.client;
 
-  // ─── User Operations ───
+  // User Operations
 
   /// Create a new user profile in Supabase
   Future<UserModel> createUser({
@@ -76,7 +76,7 @@ class SupabaseService {
     return users;
   }
 
-  // ─── Post Operations ───
+  // Post Operations
 
   /// Create a new post
   Future<void> createPost({
@@ -134,7 +134,7 @@ class SupabaseService {
     await supabase.from(AppConstants.postsTable).delete().eq('id', postId);
   }
 
-  // ─── Like Operations ───
+  // Like Operations
 
   /// Like a post
   Future<void> likePost({required String postId, required String userId}) async {
@@ -173,7 +173,7 @@ class SupabaseService {
     return (response as List).length;
   }
 
-  // ─── Comment Operations ───
+  // Comment Operations
 
   /// Add a comment to a post
   Future<CommentModel> addComment({
@@ -209,7 +209,7 @@ class SupabaseService {
     await supabase.from('comments').delete().eq('id', commentId);
   }
 
-  // ─── Follower Operations ───
+  // Follower Operations
 
   /// Follow a user
   Future<void> followUser({
